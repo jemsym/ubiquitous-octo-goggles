@@ -19,125 +19,129 @@
  * needs please refer to http://www.magentocommerce.com for more information.
  *
  * @category    Mage
- * @package     Mage_Reports
+ * @package     Mage_Adminhtml
  * @copyright   Copyright (c) 2011 Magento Inc. (http://www.magentocommerce.com)
  * @license     http://opensource.org/licenses/osl-3.0.php  Open Software License (OSL 3.0)
  */
 
 
 /**
- * Report Sold Products collection
+ * Report NotSold Products Grid Block
  *
- * @category    Mage
- * @package     Mage_Reports
- * @author      Magento Core Team <core@magentocommerce.com>
+ * @category   Mage
+ * @package    Mage_Adminhtml
+ * @author     Magento Core Team <core@magentocommerce.com>
  */
  
-class Mage_Reports_Model_Resource_Goodgifts_Soldlux_Collection extends Mage_Reports_Model_Resource_Product_Collection
+class Mage_Adminhtml_Block_Report_Goodgifts_Quantitysold_Grid extends Mage_Adminhtml_Block_Report_Grid
 {
     /**
-     * Initialize resources
+     * Sub report size
      *
+     * @var int
      */
+    protected $_subReportSize = 0;
 
-    protected function _construct()
-    {
-        parent::_construct();
-        $this->_useAnalyticFunction = true;
-    }
     /**
-     * Set Date range to collection
+     * Initialize Grid settings
      *
-     * @param int $from
-     * @param int $to
-     * @return Mage_Reports_Model_Resource_Product_Sold_Collection
      */
-
-    public function selectSubselect() 
+    public function __construct()
     {
-       return $this->getConnection()->select()
-            ->from(array('var' => 'catalog_product_entity_decimal'),
-                   array('var.value', 'entity_id'))
-            ->join(array('eav' => 'eav_attribute'),
-            "eav.attribute_code = 'price' AND eav.attribute_id = var.attribute_id");
+        parent::__construct();
+        $this->setId('gridGoodgiftsQuantitysold');
+        $this->setDefaultSort('total_quantity_sold');
     }
 
-    public function addProductsSold($from = '', $to = '')
+    /**
+     * Prepare collection object for grid
+     *
+     * @return Mage_Adminhtml_Block_Report_Product_Sold_Grid
+     */
+    protected function _prepareCollection()
     {
-        $subselect = (string)$this->selectSubselect();
-
-        $this->getSelect()->reset()
-            ->from(array('pi' => 'catalog_product_entity'),
-                   array('product_id' => 'so.product_id',
-                         'sku' => 'so.sku',
-                         'name' => 'so.name',
-                         'minimum_price' => 'MIN(so.price)',
-                         'maximum_price' => 'MAX(so.price)',
-                         'average_price' => 'AVG(so.price)',
-                         'current_price' => 'price.value',
-                         'total_quantity_sold' => 'SUM(so.qty_shipped)',
-                         'total_sales_value' => 'SUM(so.qty_shipped * so.price)',
-                         'so.created_at'))
-            ->join(array('so' => 'sales_flat_order_item'),
-                   'so.product_id = pi.entity_id',
-                   array())    
-            ->join(array('sf' => 'sales_flat_order'),
-                   'so.order_id = sf.entity_id',
-                   array())      
-            ->joinLeft(array('price' => new Zend_Db_Expr('('.$subselect.')')),
-                'price.entity_id = pi.entity_id')
-            ->where('so.qty_shipped > 0')
-            ->where("sf.status = 'pending' or sf.status = 'complete'")
-            ->where($this->_prepareBetweenSql('so.created_at', $from, $to))
-            ->group('so.sku')
-            ->order('total_sales_value DESC');
-            
-        return $this;
-    }
-
-    public function setDateRange($from, $to)
-    {
-        $this->_reset()
-            ->addAttributeToSelect('*')
-            ->addProductsSold($from, $to);
+        parent::_prepareCollection();
+        $this->getCollection()
+            ->initReport('reports/goodgifts_quantitysold_collection');
         return $this;
     }
 
     /**
-     * Set store filter to collection
+     * Prepare Grid columns
      *
-     * @param array $storeIds
-     * @return Mage_Reports_Model_Resource_Product_Sold_Collection
+     * @return Mage_Adminhtml_Block_Report_Product_Sold_Grid
      */
-    public function setStoreIds($storeIds)
+    protected function _prepareColumns()
     {
-        if ($storeIds) {
-            $this->getSelect()->where('so.store_id IN (?)', (array)$storeIds);
-        }
-        return $this;
-    }
 
-    /**
-     * Add website product limitation
-     *
-     * @return Mage_Reports_Model_Resource_Product_Sold_Collection
-     */
-    protected function _productLimitationJoinWebsite()
-    {
-        $filters     = $this->_productLimitationFilters;
-        $conditions  = array('product_website.product_id=e.entity_id');
-        if (isset($filters['website_ids'])) {
-            $conditions[] = $this->getConnection()
-                ->quoteInto('product_website.website_id IN(?)', $filters['website_ids']);
+        $this->addColumn('product_id', array(
+            'header'    =>Mage::helper('reports')->__('ID'),
+            'index'     =>'product_id',
+            'type'      =>'number'
+        ));
 
-            $subQuery = $this->getConnection()->select()
-                ->from(array('product_website' => $this->getTable('catalog/product_website')),
-                    array('product_website.product_id')
-                )
-                ->where(join(' AND ', $conditions));
-            $this->getSelect()->where('e.entity_id IN( '.$subQuery.' )');
-        }
+        $this->addColumn('sku', array(
+            'header'    =>Mage::helper('reports')->__('SKU'),
+            'index'     =>'sku'
+        ));
+        
+        $this->addColumn('name', array(
+            'header'    =>Mage::helper('reports')->__('Product Name'),
+            'index'     =>'name'
+        ));
 
-        return $this;
+        $currencyCode = $this->getCurrentCurrencyCode();
+        
+        $this->addColumn('minimum_price', array(
+            'header'    =>Mage::helper('reports')->__('Minimum Price'),
+            'index'     =>'minimum_price',
+            'currency_code' => $currencyCode,
+            'total'         => 'sum',
+            'type'      =>'currency'
+        ));
+        
+        $this->addColumn('maximum_price', array(
+            'header'    =>Mage::helper('reports')->__('Maximum Price'),
+            'index'     =>'maximum_price',
+            'currency_code' => $currencyCode,
+            'total'         => 'sum',
+            'type'      =>'currency'
+        ));
+        
+        $this->addColumn('average_price', array(
+            'header'    =>Mage::helper('reports')->__('Average Price'),
+            'index'     =>'average_price',
+            'currency_code' => $currencyCode,
+            'total'         => 'sum',
+            'type'      =>'currency'
+        ));
+        
+        $this->addColumn('current_price', array(
+            'header'    =>Mage::helper('reports')->__('Current Price'),
+            'index'     =>'current_price',
+            'currency_code' => $currencyCode,
+            'total'         => 'sum',
+            'type'      =>'currency'
+        ));
+        
+        $this->addColumn('total_quantity_sold', array(
+            'header'    =>Mage::helper('reports')->__('Total Quantity Sold'),
+            'index'     =>'total_quantity_sold',
+            'type'      =>'number',
+            'total'     => 'sum'
+        ));
+        
+        $this->addColumn('total_sales_value', array(
+            'header'    =>Mage::helper('reports')->__('Total Sales Value'),
+            'index'     =>'total_sales_value',
+            'currency_code' => $currencyCode,
+            'total'         => 'sum',
+            'type'      =>'currency'
+        ));
+
+        $this->addExportType('*/*/exportQuantitysoldCsv', Mage::helper('reports')->__('CSV'));
+        $this->addExportType('*/*/exportQuantitysoldExcel', Mage::helper('reports')->__('Excel XML'));
+
+        return parent::_prepareColumns();
     }
 }
