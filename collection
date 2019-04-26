@@ -33,7 +33,7 @@
  * @author     Magento Core Team <core@magentocommerce.com>
  */
  
-class Mage_Adminhtml_Block_Report_Goodgifts_Quantitysold_Grid extends Mage_Adminhtml_Block_Report_Grid
+class Mage_Adminhtml_Block_Report_Goodgifts_Soldlux_Grid extends Mage_Adminhtml_Block_Report_Grid
 {
     /**
      * Sub report size
@@ -49,8 +49,11 @@ class Mage_Adminhtml_Block_Report_Goodgifts_Quantitysold_Grid extends Mage_Admin
     public function __construct()
     {
         parent::__construct();
-        $this->setId('gridGoodgiftsQuantitysold');
-        $this->setDefaultSort('total_quantity_sold');
+        $this->setId('gridGoodgiftsSoldlux');
+        $this->setUseAjax(true);
+        $this->setDefaultSort('total_sales_value');
+        $this->setDefaultDir('DESC');
+        $this->setSaveParametersInSession(true);
     }
 
     /**
@@ -62,7 +65,7 @@ class Mage_Adminhtml_Block_Report_Goodgifts_Quantitysold_Grid extends Mage_Admin
     {
         parent::_prepareCollection();
         $this->getCollection()
-            ->initReport('reports/goodgifts_quantitysold_collection');
+            ->initReport('reports/goodgifts_soldlux_collection');
         return $this;
     }
 
@@ -75,7 +78,7 @@ class Mage_Adminhtml_Block_Report_Goodgifts_Quantitysold_Grid extends Mage_Admin
     {
 
         $this->addColumn('product_id', array(
-            'header'    =>Mage::helper('reports')->__('ID'),
+            'header'    =>Mage::helper('reports')->__('Product ID'),
             'index'     =>'product_id',
             'type'      =>'number'
         ));
@@ -139,8 +142,8 @@ class Mage_Adminhtml_Block_Report_Goodgifts_Quantitysold_Grid extends Mage_Admin
             'type'      =>'currency'
         ));
 
-        $this->addExportType('*/*/exportQuantitysoldCsv', Mage::helper('reports')->__('CSV'));
-        $this->addExportType('*/*/exportQuantitysoldExcel', Mage::helper('reports')->__('Excel XML'));
+        $this->addExportType('*/*/exportSoldluxCsv', Mage::helper('reports')->__('CSV'));
+        $this->addExportType('*/*/exportSoldluxExcel', Mage::helper('reports')->__('Excel XML'));
 
         return parent::_prepareColumns();
     }
