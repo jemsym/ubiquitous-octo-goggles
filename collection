@@ -1,0 +1,150 @@
+<?php
+/**
+ * Magento
+ *
+ * NOTICE OF LICENSE
+ *
+ * This source file is subject to the Open Software License (OSL 3.0)
+ * that is bundled with this package in the file LICENSE.txt.
+ * It is also available through the world-wide-web at this URL:
+ * http://opensource.org/licenses/osl-3.0.php
+ * If you did not receive a copy of the license and are unable to
+ * obtain it through the world-wide-web, please send an email
+ * to license@magentocommerce.com so we can send you a copy immediately.
+ *
+ * DISCLAIMER
+ *
+ * Do not edit or add to this file if you wish to upgrade Magento to newer
+ * versions in the future. If you wish to customize Magento for your
+ * needs please refer to http://www.magentocommerce.com for more information.
+ *
+ * @category    Mage
+ * @package     Mage_Reports
+ * @copyright   Copyright (c) 2011 Magento Inc. (http://www.magentocommerce.com)
+ * @license     http://opensource.org/licenses/osl-3.0.php  Open Software License (OSL 3.0)
+ */
+
+
+/**
+ * Report Sold Products collection
+ *
+ * @category    Mage
+ * @package     Mage_Reports
+ * @author      Magento Core Team <core@magentocommerce.com>
+ */
+class Mage_Reports_Model_Resource_Goodgifts_Quantitysold_Collection extends Mage_Reports_Model_Resource_Product_Collection
+{
+    /**
+     * Initialize resources
+     *
+     */
+
+    protected function _construct()
+    {
+        parent::_construct();
+        $this->_useAnalyticFunction = true;
+    }
+
+    public function selectGiftaidable()
+    {
+        return $this->getConnection()->select()
+            ->from(array('var'=>'catalog_product_entity_varchar'),
+                   array('var.value', 'entity_id'))
+            ->join(array('eav' => 'eav_attribute'),
+                   "eav.attribute_code = 'giftaidable' AND eav.attribute_id = var.attribute_id");
+    }
+
+    public function selectProducts($store,$storeIds)
+    {
+        $subselect = (string)$this->selectGiftaidable();
+
+        return $this->getConnection()->select()
+            ->from(array('cp'=>'catalog_product_flat_'.$store),
+                   array(new Zend_Db_Expr('"'.$store.'" AS store_id'),
+                         'cp.sku',
+                         'genre' => 'cp.type_id', // ??
+                         'cp.product_group',
+                         'product_name' => 'cp.name',
+                         'unit_cost' => 'cp.price',
+                         'cp.delivering_charity',
+                         'giftaid'=>'giftaidable.value',
+                         // needs delivery charge
+                       ))
+            ->joinLeft(array('giftaidable' => new Zend_Db_Expr('('.$subselect.')')),
+                       'giftaidable.entity_id = cp.entity_id');
+    }
+
+    /**
+     * Set Date range to collection
+     *
+     * @param int $from
+     * @param int $to
+     * @return Mage_Reports_Model_Resource_Product_Sold_Collection
+     */
+
+    public function addProducts($from = '', $to = '')
+    {
+        $subselectA = (string)$this->selectProducts("1");
+        $subselectB = (string)$this->selectProducts("2");
+
+        $this->getSelect()->reset()
+            ->union(array("SELECT * FROM(".$subselectA,
+                          $subselectB.') AS item'));
+        // time makes no sense here
+        // ->where($this->_prepareBetweenSql('so.created_at', $from, $to));
+        return $this;
+    }
+
+    public function setDateRange($from, $to)
+    {
+        $this->_reset()
+            ->addAttributeToSelect('*')
+            ->addProducts($from, $to);
+        return $this;
+    }
+
+    /**
+     * Set store filter to collection
+     *
+     * @param array $storeIds
+     * @return Mage_Reports_Model_Resource_Product_Sold_Collection
+     */
+    public function setStoreIds($storeIds)
+    {
+        if ($storeIds) {
+            $subselectA = (string)$this->selectProducts("1");
+            $subselectB = (string)$this->selectProducts("2");
+
+            $this->getSelect()->reset()
+                ->union(array("SELECT * FROM(".$subselectA,
+                              $subselectB.') AS item WHERE item.store_id IN ('.
+                              implode(',',$storeIds).')'));
+        }
+
+        return $this;
+    }
+
+    /**
+     * Add website product limitation
+     *
+     * @return Mage_Reports_Model_Resource_Product_Sold_Collection
+     */
+    protected function _productLimitationJoinWebsite()
+    {
+        $filters     = $this->_productLimitationFilters;
+        $conditions  = array('product_website.product_id=e.entity_id');
+        if (isset($filters['website_ids'])) {
+            $conditions[] = $this->getConnection()
+                ->quoteInto('product_website.website_id IN(?)', $filters['website_ids']);
+
+            $subQuery = $this->getConnection()->select()
+                ->from(array('product_website' => $this->getTable('catalog/product_website')),
+                    array('product_website.product_id')
+                )
+                ->where(join(' AND ', $conditions));
+            $this->getSelect()->where('e.entity_id IN( '.$subQuery.' )');
+        }
+
+        return $this;
+    }
+}
